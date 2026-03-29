@@ -3,31 +3,31 @@ import re
 import hashlib
 from flask import Flask, render_template_string, jsonify
 import docx
-from docx.enum.text import WD_COLOR_INDEX
+from docx.shared import RGBColor
 
 app = Flask(__name__, static_folder='static')
 
 # Lấy thư mục gốc chứa file app.py hiện tại
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Ghép với tên file (Sửa lại thành 'Decuong.docx' cho đúng chữ c thường như trong ảnh)
+# Ghép với tên file đề cương (Đảm bảo chữ D viết hoa, chữ c viết thường)
 DOCX_FILE = os.path.join(BASE_DIR, 'Decuong.docx')
 
-# Tạo thư mục lưu ảnh (Cũng dùng BASE_DIR cho an toàn)
+# Tạo thư mục lưu ảnh 
 os.makedirs(os.path.join(BASE_DIR, 'static', 'images'), exist_ok=True)
 
 def is_correct_format(run):
     """
-    Hàm kiểm tra xem một đoạn text (run) có được highlight màu vàng hay không.
-    Sử dụng try-except để tránh lỗi khi highlight trong Word được set là 'None'.
+    Hàm kiểm tra xem một đoạn text (run) có phải là đáp án đúng không.
+    Sử dụng màu chữ ĐỎ (Mã hex: FF0000) để làm chuẩn.
     """
     try:
-        # Kiểm tra nếu thuộc tính highlight_color là màu vàng
-        if run.font.highlight_color == WD_COLOR_INDEX.YELLOW:
-            return True
-    except ValueError:
-        # Bắt lỗi "ValueError: WD_COLOR_INDEX has no XML mapping for 'none'"
-        # Bỏ qua và ngầm hiểu là không có highlight màu vàng
+        # Kiểm tra nếu màu chữ tồn tại và có mã màu RGB
+        if run.font.color and run.font.color.rgb:
+            # So sánh mã màu với màu đỏ chuẩn (FF0000)
+            if str(run.font.color.rgb).upper() == 'FF0000':
+                return True
+    except Exception:
         pass
         
     return False
@@ -52,7 +52,7 @@ def parse_docx(file_path):
                         image_part = doc.part.related_parts[embed_id]
                         img_hash = hashlib.md5(image_part.blob).hexdigest()
                         img_filename = f"img_{img_hash}.png"
-                        img_path = os.path.join('static', 'images', img_filename)
+                        img_path = os.path.join(BASE_DIR, 'static', 'images', img_filename)
                         
                         with open(img_path, 'wb') as f:
                             f.write(image_part.blob)
@@ -203,7 +203,7 @@ HTML_TEMPLATE = """
     <div id="result-container" class="alert alert-success fs-5 text-center shadow border-0 rounded-4 py-4 mt-4" style="display: none; background: #00b894; color: white;"></div>
 </div>
 
-<div class="bottom-bar" id="submit-area">
+<div class="bottom-bar" id="submit-area" style="display: none;">
     <button class="btn btn-primary btn-lg px-5 fw-bold rounded-pill shadow" id="btn-submit" onclick="submitQuiz()" style="background: #0984e3; border:none;">
         <i class="bi bi-send-check-fill"></i> Nộp Bài Ngay
     </button>
@@ -215,11 +215,21 @@ HTML_TEMPLATE = """
     let batchIndex = 0;
     const batchSize = 50;
 
+    // Cải tiến hàm fetch để bắt lỗi rõ ràng hơn trên giao diện
     fetch('/api/questions')
         .then(response => response.json())
         .then(data => {
+            if (data.error) {
+                document.getElementById("quiz-container").innerHTML = `<div class="alert alert-danger fs-5 text-center mt-5"><i class="bi bi-exclamation-triangle-fill"></i> Lỗi: ${data.error}</div>`;
+                document.getElementById("progress-text").innerHTML = "Lỗi tải dữ liệu";
+                return;
+            }
             allQuestions = data;
             loadBatch(true);
+        })
+        .catch(err => {
+            document.getElementById("quiz-container").innerHTML = `<div class="alert alert-danger fs-5 text-center mt-5"><i class="bi bi-x-octagon-fill"></i> Máy chủ báo lỗi: ${err}</div>`;
+            document.getElementById("progress-text").innerHTML = "Lỗi Server";
         });
 
     function shuffleArray(array) {
@@ -298,7 +308,6 @@ HTML_TEMPLATE = """
     }
 
     function submitQuiz() {
-        // KHÔNG BẮT BUỘC XÁC NHẬN NỮA. Bấm là chấm luôn!
         const container = document.getElementById("quiz-container");
         const questions = JSON.parse(container.dataset.questions);
         

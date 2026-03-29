@@ -7,8 +7,14 @@ from docx.enum.text import WD_COLOR_INDEX
 
 app = Flask(__name__, static_folder='static')
 
-DOCX_FILE = 'DeCuong.docx'
-os.makedirs(os.path.join('static', 'images'), exist_ok=True)
+# Lấy thư mục gốc chứa file app.py hiện tại
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Ghép với tên file (Sửa lại thành 'Decuong.docx' cho đúng chữ c thường như trong ảnh)
+DOCX_FILE = os.path.join(BASE_DIR, 'Decuong.docx')
+
+# Tạo thư mục lưu ảnh (Cũng dùng BASE_DIR cho an toàn)
+os.makedirs(os.path.join(BASE_DIR, 'static', 'images'), exist_ok=True)
 
 def is_correct_format(run):
     """
